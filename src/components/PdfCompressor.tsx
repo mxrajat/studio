@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useCallback, type DragEvent } from 'react';
-import { PDFDocument, PDFImage } from 'pdf-lib';
+import { PDFDocument, PDFImage, PDFName, PDFRawStream } from 'pdf-lib';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardFooter } from '@/components/ui/card';
 import { useToast } from "@/hooks/use-toast";
@@ -97,15 +97,26 @@ export default function PdfCompressor() {
   
       const pages = pdfDoc.getPages();
       for (const page of pages) {
-        const imageNames = page.node.Resources().get(PDFName.of('XObject'))?.keys();
+        const imageNames = page.node.Resources()?.lookup(PDFName.of('XObject'))?.keys();
         if (!imageNames) continue;
   
         for (const name of imageNames) {
-          const xobject = page.node.Resources().lookup(name);
+          const xobject = page.node.Resources()?.lookup(name);
           if (xobject instanceof PDFRawStream) {
-            const image = await pdfDoc.embedJpg(await xobject.asImage().toJpeg(quality));
-            page.node.Resources().set(name, image.ref);
-            imagesCompressed = true;
+            try {
+              const image = await pdfDoc.embedJpg(await xobject.asImage().toJpeg(quality));
+              page.node.Resources()?.set(name, image.ref);
+              imagesCompressed = true;
+            } catch (err) {
+              console.warn(`Skipping an image that could not be compressed: ${err}`);
+              // This might be a non-standard image format, we can try to re-embed it as png
+              try {
+                const image = await pdfDoc.embedPng(await xobject.asImage().toPng());
+                page.node.Resources()?.set(name, image.ref);
+              } catch(pngErr) {
+                 console.warn(`Could not re-embed as PNG: ${pngErr}`);
+              }
+            }
           }
         }
       }
