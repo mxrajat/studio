@@ -98,20 +98,12 @@ export default function PdfCompressor() {
       // For images, we would need to extract, compress, and replace them, which is more complex.
       // pdf-lib doesn't directly support image re-compression of existing images.
       // We will just re-save it which might reduce size by optimizing objects.
-      // The "compression" is simulated by the slider for this demo.
-      
-      const quality = compressionLevels[compressionLevel[0]].value;
-
-      // A simple trick to 'pretend' we are compressing is to remove pages
-      // but that is destructive. We'll just re-save. For a real app, a more
-      // powerful library or a server-side tool would be needed.
       
       const compressedPdfBytes = await pdfDoc.save();
       
-      // Simulate size reduction based on slider.
-      // In a real scenario, the byte array length would be the actual size.
-      const simulatedCompressedSize = pdfFile.size * quality;
-      const blob = new Blob([compressedPdfBytes.buffer.slice(0, Math.round(simulatedCompressedSize))], { type: 'application/pdf' });
+      // The previous implementation was corrupting the file by slicing the byte array.
+      // This is now fixed to use the full byte array, ensuring the PDF is valid.
+      const blob = new Blob([compressedPdfBytes], { type: 'application/pdf' });
       const url = URL.createObjectURL(blob);
       
       setCompressedUrl(url);
