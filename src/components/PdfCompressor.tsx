@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useCallback, type DragEvent } from 'react';
-import { PDFDocument } from 'pdf-lib';
+import { PDFDocument, PDFImage } from 'pdf-lib';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardFooter } from '@/components/ui/card';
 import { useToast } from "@/hooks/use-toast";
@@ -85,36 +85,58 @@ export default function PdfCompressor() {
     setIsCompressing(true);
     setCompressedUrl(null);
     setCompressedSize(null);
-
+  
     try {
       const existingPdfBytes = await pdfFile.arrayBuffer();
-      const pdfDoc = await PDFDocument.load(existingPdfBytes, { 
-        // Some PDFs might be encrypted and we can't do anything about it.
-        // This will allow us to load them but saving might fail.
-        ignoreEncryption: true 
+      const pdfDoc = await PDFDocument.load(existingPdfBytes, {
+        ignoreEncryption: true,
       });
-
-      // This is a very basic compression attempt by re-saving the doc.
-      // For images, we would need to extract, compress, and replace them, which is more complex.
-      // pdf-lib doesn't directly support image re-compression of existing images.
-      // We will just re-save it which might reduce size by optimizing objects.
-      
-      const compressedPdfBytes = await pdfDoc.save();
-      
-      // The previous implementation was corrupting the file by slicing the byte array.
-      // This is now fixed to use the full byte array, ensuring the PDF is valid.
+  
+      const quality = compressionLevels[compressionLevel[0]].value;
+      let imagesCompressed = false;
+  
+      const pages = pdfDoc.getPages();
+      for (const page of pages) {
+        const imageNames = page.node.Resources().get(PDFName.of('XObject'))?.keys();
+        if (!imageNames) continue;
+  
+        for (const name of imageNames) {
+          const xobject = page.node.Resources().lookup(name);
+          if (xobject instanceof PDFRawStream) {
+            const image = await pdfDoc.embedJpg(await xobject.asImage().toJpeg(quality));
+            page.node.Resources().set(name, image.ref);
+            imagesCompressed = true;
+          }
+        }
+      }
+  
+      let compressedPdfBytes;
+      if (imagesCompressed) {
+        compressedPdfBytes = await pdfDoc.save();
+      } else {
+        // Fallback for PDFs with no standard images or other structures
+        compressedPdfBytes = await pdfDoc.save({ useObjectStreams: false });
+      }
+  
       const blob = new Blob([compressedPdfBytes], { type: 'application/pdf' });
       const url = URL.createObjectURL(blob);
-      
+  
       setCompressedUrl(url);
       setCompressedSize(blob.size);
-
+  
+      if (!imagesCompressed) {
+        toast({
+          title: "Limited Compression",
+          description: "No standard images were found to compress. File size may not be significantly reduced.",
+        });
+      }
     } catch (err) {
       console.error(err);
       toast({
-        variant: "destructive",
-        title: "Compression Failed",
-        description: "Could not compress the PDF. The file might be corrupted or encrypted.",
+        variant: 'destructive',
+        title: 'Compression Failed',
+        description:
+          'Could not compress the PDF. The file might be corrupted, encrypted, or contain unsupported image formats.',
       });
     } finally {
       setIsCompressing(false);
