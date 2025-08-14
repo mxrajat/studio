@@ -8,6 +8,7 @@ import { useToast } from "@/hooks/use-toast";
 import { UploadCloud, FileDown, Loader2, FileArchive, ArrowRight, Gauge } from 'lucide-react';
 import { Slider } from './ui/slider';
 import { Badge } from './ui/badge';
+import { Separator } from './ui/separator';
 
 const compressionLevels = [
   { name: 'Low', value: 0.75, description: 'Good quality, less compression.' },
@@ -109,7 +110,6 @@ export default function PdfCompressor() {
               imagesCompressed = true;
             } catch (err) {
               console.warn(`Skipping an image that could not be compressed: ${err}`);
-              // This might be a non-standard image format, we can try to re-embed it as png
               try {
                 const image = await pdfDoc.embedPng(await xobject.asImage().toPng());
                 page.node.Resources()?.set(name, image.ref);
@@ -125,7 +125,6 @@ export default function PdfCompressor() {
       if (imagesCompressed) {
         compressedPdfBytes = await pdfDoc.save();
       } else {
-        // Fallback for PDFs with no standard images or other structures
         compressedPdfBytes = await pdfDoc.save({ useObjectStreams: false });
       }
   
@@ -178,40 +177,45 @@ export default function PdfCompressor() {
       {pdfFile && (
         <div className="space-y-6">
           <Card className="p-6 bg-card/80 shadow-inner">
-            <h2 className="text-2xl font-bold text-center font-headline mb-4">Compress "{pdfFile.name}"</h2>
-
-            <div className='flex justify-around items-center my-6'>
-                <div className='text-center'>
-                    <Badge variant="secondary">Original Size</Badge>
-                    <p className='font-bold text-lg mt-1'>{originalSize ? formatBytes(originalSize) : 'N/A'}</p>
+            <h2 className="text-2xl font-bold text-center font-headline mb-6 truncate" title={pdfFile.name}>Compress "{pdfFile.name}"</h2>
+            
+            <div className="grid md:grid-cols-2 gap-8 items-center">
+              <div className="space-y-4">
+                <div className="flex items-center gap-4">
+                  <Gauge className="w-6 h-6 text-primary"/>
+                  <h3 className="text-lg font-semibold">Compression</h3>
+                  <Badge variant="outline">{compressionLevels[compressionLevel[0]].name}</Badge>
                 </div>
-                <ArrowRight className='w-8 h-8 text-muted-foreground'/>
-                 <div className='text-center'>
-                    <Badge>Estimated Size</Badge>
-                    <p className='font-bold text-lg mt-1'>{estimatedSize ? formatBytes(estimatedSize) : 'N/A'}</p>
-                </div>
-            </div>
-
-            <div className="space-y-4">
-              <div className="flex items-center gap-4">
-                <Gauge className="w-6 h-6 text-primary"/>
-                <h3 className="text-lg font-semibold">Compression Level</h3>
-                <Badge variant="outline">{compressionLevels[compressionLevel[0]].name}</Badge>
+                <Slider
+                  min={0}
+                  max={2}
+                  step={1}
+                  value={compressionLevel}
+                  onValueChange={setCompressionLevel}
+                  disabled={isCompressing}
+                />
               </div>
-              <Slider
-                min={0}
-                max={2}
-                step={1}
-                value={compressionLevel}
-                onValueChange={setCompressionLevel}
-                disabled={isCompressing}
-              />
-              <p className="text-sm text-muted-foreground text-center">
-                {compressionLevels[compressionLevel[0]].description}
-              </p>
+
+              <div className='flex justify-around items-center'>
+                  <div className='text-center'>
+                      <Badge variant="secondary">Original Size</Badge>
+                      <p className='font-bold text-lg mt-1'>{originalSize ? formatBytes(originalSize) : 'N/A'}</p>
+                  </div>
+                  <ArrowRight className='w-8 h-8 text-muted-foreground'/>
+                   <div className='text-center'>
+                      <Badge>Estimated Size</Badge>
+                      <p className='font-bold text-lg mt-1'>{estimatedSize ? formatBytes(estimatedSize) : 'N/A'}</p>
+                  </div>
+              </div>
             </div>
             
-            <div className="mt-6 flex flex-col sm:flex-row gap-4 justify-center">
+            <Separator className="my-6" />
+
+            <p className="text-sm text-muted-foreground text-center mb-6">
+              {compressionLevels[compressionLevel[0]].description}
+            </p>
+
+            <div className="flex flex-col sm:flex-row gap-4 justify-center">
                 <Button onClick={handleCompress} disabled={isCompressing} size="lg" className="w-full sm:w-auto">
                   {isCompressing ? <Loader2 className="w-5 h-5 animate-spin" /> : <FileArchive className="w-5 h-5"/>}
                   <span>{isCompressing ? 'Compressing...' : 'Compress PDF'}</span>
@@ -219,10 +223,15 @@ export default function PdfCompressor() {
             </div>
           </Card>
           
-          {compressedUrl && compressedSize && (
+          {compressedUrl && compressedSize != null && originalSize != null && (
              <Card className="p-6 bg-green-50 border-green-200 text-center animate-in fade-in-50 duration-500">
                 <h3 className="text-2xl font-bold text-green-800 font-headline">Compression Complete!</h3>
-                 <p className="text-muted-foreground mt-2">Final size: <span className="font-bold">{formatBytes(compressedSize)}</span></p>
+                 <p className="text-muted-foreground mt-2">
+                  Final size: <span className="font-bold">{formatBytes(compressedSize)}</span>
+                  {originalSize > compressedSize && (
+                     <span className="text-sm ml-2">({formatBytes(originalSize - compressedSize)} saved)</span>
+                  )}
+                 </p>
                 <div className="mt-4 flex flex-col sm:flex-row gap-4 justify-center">
                      <a href={compressedUrl} download={`${pdfFile.name.replace('.pdf', '')}-compressed.pdf`}>
                         <Button size="lg" className="bg-green-600 hover:bg-green-700 w-full sm:w-auto">
