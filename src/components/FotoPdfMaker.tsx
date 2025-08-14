@@ -187,7 +187,7 @@ export default function FotoPdfMaker() {
   };
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-8 pt-8">
       <Card 
         className="border-2 border-dashed border-primary/50 hover:border-primary transition-colors duration-300 bg-accent/30"
         onDragOver={handleDragOver}
